@@ -1,27 +1,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
-#include <string.h>
 #define MAXN 1024
 
 typedef struct {
 	int v, w, c;
-	float uV;
 } Object;
 
 int W, N;
 int bound = INT_MIN;
 Object obj[MAXN];
 
-int comByuV(const void *a, const void *b){
+int compare(const void *a, const void *b){
 	Object *A = (Object *)a, *B = (Object *)b;
-	if(A->uV > B->uV) return -1;
-	else if(A->uV < B->uV) return 1;
-	if(A->w > B->w) return -1;
+	if((float)A->v/A->w > (float)B->v/B->w) return -1;
 	return 1;
 }
 
-float UGreedy(int index, int w){
+int UGreedy(int index, int w){
 	float ub = 0;
 	for(int i=index; i<N && w < W; i++){
 		float tmp = W - w;
@@ -30,7 +26,7 @@ float UGreedy(int index, int w){
 		w += k * obj[i].w;
 		ub += (float)obj[i].v * k;
 	}
-	return ub;
+	return (int)ub;
 }
 
 int LGreedy(int index, int w){
@@ -45,7 +41,8 @@ int LGreedy(int index, int w){
 	return lb;
 }
 
-void DFS(int index, int w, int v, float ub){
+void DFS(int index, int w, int v){
+	int ub = v + UGreedy(index, w);
 	if(w > W) return;
 	if(ub <= bound) return;
 	if(index >= N){
@@ -55,10 +52,8 @@ void DFS(int index, int w, int v, float ub){
 	int tmp = W - w;
 	int c = tmp / obj[index].w;
 	c = (c <= obj[index].c)? c: obj[index].c;
-	for(int i=c; i>=0; i--){
-		float ub_tmp = v + obj[index].v*i + UGreedy(index + 1, w + obj[index].w * i);
-		DFS(index + 1, w + obj[index].w*i, v + obj[index].v*i, ub_tmp);
-	}
+	for(int i=c; i>=0; i--)
+		DFS(index + 1, w + obj[index].w*i, v + obj[index].v*i);
 	return;
 }
 
@@ -70,11 +65,10 @@ int main(){
 		obj[i].v = v;
 		obj[i].w = w;
 		obj[i].c = c;
-		obj[i].uV = (float)v/w;
 	}
-	qsort(obj, N, sizeof(obj[0]), comByuV);
+	qsort(obj, N, sizeof(obj[0]), compare);
 	bound = LGreedy(0, 0);
-	DFS(0, 0, 0, UGreedy(0, 0));
+	DFS(0, 0, 0);
 	printf("%d\n", bound);
 	return 0;
 }
