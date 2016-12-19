@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <time.h>
 #define MAXN 1024
 
 typedef struct {
@@ -13,7 +14,11 @@ Object obj[MAXN];
 
 int compare(const void *a, const void *b){
 	Object *A = (Object *)a, *B = (Object *)b;
-	if((float)A->v/A->w > (float)B->v/B->w) return -1;
+	float cpA = (float)A->v/A->w, cpB = (float)B->v/B->w;
+	if(cpA > cpB) return -1;
+	else if(cpA < cpB) return 1;
+
+	if(A->w > B->w) return -1;
 	return 1;
 }
 
@@ -41,6 +46,7 @@ int LGreedy(int index, int w){
 	return lb;
 }
 
+int a = 0;
 void DFS(int index, int w, int v){
 	int ub = v + UGreedy(index, w);
 	if(w > W) return;
@@ -49,6 +55,14 @@ void DFS(int index, int w, int v){
 		if(v > bound) bound = v;
 		return;
 	}
+	if(a % 100000000 == 0){
+		a = 0;
+		if(clock() > CLOCKS_PER_SEC){
+			bound = ub;
+			return;
+		}
+	}
+a++;
 	int tmp = W - w;
 	int c = tmp / obj[index].w;
 	c = (c <= obj[index].c)? c: obj[index].c;

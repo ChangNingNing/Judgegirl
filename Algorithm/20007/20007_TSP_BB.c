@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
-#define MAXN 30
+#define MAXN 100
 
 int N, ub = INT_MAX;
 int outUsed[MAXN] = {0}, inUsed[MAXN] = {0}, D[MAXN][MAXN] = {0};
@@ -85,7 +85,7 @@ int main(){
 	for(int i=0; i<N; i++){
 		for(int j=0; j<N; j++){
 			scanf("%d", &D[i][j]);
-			if(D[i][j] == 0) D[i][j] = -1;
+			if(D[i][j] == 0) D[i][j] = 0x3f3f3f;
 		}
 	}
 	int X[MAXN] = {0}, Y[MAXN] = {0};
