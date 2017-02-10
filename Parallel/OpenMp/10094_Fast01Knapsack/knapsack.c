@@ -23,12 +23,14 @@ int main(){
 		int w = obj[i][0], v = obj[i][1];
 		#pragma omp parallel
 		{
+			int *ptr = DP[cur], *ptr2 = DP[pre];
 			#pragma omp for
 			for(int j=w; j<=M; j++)
-				DP[cur][j] = Max(DP[pre][j], DP[pre][j-w] + v);
+				// DP[cur][j] = Max(DP[pre][j], DP[pre][j-w] + v);
+				ptr[j] = Max(ptr2[j], ptr2[j-w] + v);
 			#pragma omp for
 			for(int j=1; j<w; j++)
-				DP[cur][j] = DP[pre][j];
+				ptr[j] = ptr2[j];
 		}
 		Swap(pre, cur);
 	}
