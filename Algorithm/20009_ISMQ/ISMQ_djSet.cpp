@@ -2,40 +2,40 @@
 #include <algorithm>
 using namespace std;
  
-uint32_t index, r;
-uint32_t A[1<<24][3];
-uint32_t set[1<<24];
+uint32_t index, nSet;
+uint32_t Value[1<<24], Parent[1<<24];
+uint32_t Rank[1<<24], Set[1<<24];
 void init_ISMQ(int N) {
-    index = r = 0;
+    index = nSet = 0;
 }
 void append_ISMQ(uint32_t V) {
-    A[index][0] = V, A[index][1] = index, A[index][2] = 1;
-	uint32_t root = index, *ptr = set+r-1;
-	for(int i=r-1; i>=0; i--, ptr--){
-		if(A[*ptr][0] < V){
-			if(A[*ptr][2] > A[root][2]){
-				A[root][1] = *ptr;
-				A[*ptr][0] = V;
-				root = *ptr;
-			}
-			else{
-				A[*ptr][1] = root;
-				A[root][2] += 1;
-			}
-			r--;
-		}
-		else break;
-	}
-	set[r] = root;
-    index++, r++;
+    Value[index] = V, Parent[index] = index;
+    uint32_t root = index, *ptr = Set+nSet-1, tmpRank = 1;
+    for (int i=nSet-1; i>=0; i--, nSet--, ptr--){
+        if (Value[*ptr] <= V){
+            if (Rank[i] >= tmpRank){
+                Parent[root] = *ptr;
+                root = *ptr;
+                tmpRank = Rank[i];
+            }
+            else {
+                Parent[*ptr] = root;
+                tmpRank += 1;
+            }
+        }
+        else break;
+    }
+    Set[nSet] = root;
+    Rank[nSet] = tmpRank;
+	Value[Set[nSet]] = V;
+    index++, nSet++;
 }
 uint32_t FindRoot(uint32_t L){
-	if(A[L][1] != L)
-		A[L][1] = FindRoot(A[L][1]);
-	return A[L][1];
+    if (Parent[L] != L)
+        Parent[L] = FindRoot(Parent[L]);
+    return Parent[L];
 }
-
+ 
 uint32_t query_ISMQ(uint32_t L) {
-	uint32_t root = FindRoot(L);
-	return A[root][0];
+    return Value[FindRoot(L)];
 }
