@@ -36,7 +36,7 @@ int preProcess(){
 	assert(status == CL_SUCCESS);
 
 	/* command queue */
-	commandQueue = clCreateCommandQueue(context, GPU[0], CL_QUEUE_PROFILING_ENABLE, &status);
+	commandQueue = clCreateCommandQueue(context, GPU[0], 0, &status);
 	assert(status == CL_SUCCESS);
 
 	/* Kernel source */
@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
 		/* run */
 		size_t gS[] = {(size_t)N};
 		size_t lS[] = {1};
-		status = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL, gS, lS, 0, NULL, NULL);
+		status = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL, gS, 0, 0, NULL, NULL);
 		assert(status == CL_SUCCESS);
 
 		/* get result */

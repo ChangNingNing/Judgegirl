@@ -77,7 +77,7 @@ void mul(int N, cl_mem bufferA, cl_mem bufferB, cl_mem bufferC) {
 
 	/* start kernel */
 	status = clEnqueueNDRangeKernel(commandQueue, kernelMul, 1, NULL,
-				globalS, localS, 0, NULL, NULL);
+				globalS, 0, 0, NULL, NULL);
 	return;
 }
 
@@ -95,7 +95,7 @@ void add(int N, cl_mem bufferA, cl_mem bufferB, cl_mem bufferC) {
 
 	/* start kernel */
 	status = clEnqueueNDRangeKernel(commandQueue, kernelAdd, 1, NULL,
-				globalS, localS, 0, NULL, NULL);
+				globalS, 0, 0, NULL, NULL);
 	return;
 }
 
