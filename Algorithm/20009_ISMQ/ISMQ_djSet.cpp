@@ -13,15 +13,18 @@ void append_ISMQ(uint32_t V) {
     uint32_t root = index, *ptr = Set+nSet-1, tmpRank = 1;
     for (int i=nSet-1; i>=0; i--, nSet--, ptr--){
         if (Value[*ptr] <= V){
-            if (Rank[i] >= tmpRank){
+            if (Rank[i] > tmpRank){
                 Parent[root] = *ptr;
                 root = *ptr;
                 tmpRank = Rank[i];
             }
-            else {
+            else if (Rank[i] < tmpRank){
+                Parent[*ptr] = root;
+            }
+			else{
                 Parent[*ptr] = root;
                 tmpRank += 1;
-            }
+			}
         }
         else break;
     }

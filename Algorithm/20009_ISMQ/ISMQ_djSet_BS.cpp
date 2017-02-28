@@ -11,11 +11,8 @@ void init_ISMQ(int N) {
 }
 void append_ISMQ(uint32_t V) {
 	int l = index;
-	for(int i=nSet-1; i>=0; i--){
-		if(Set[i] < V){
-			l = Range[i];
-			nSet--;
-		}
+	for(int i=nSet-1; i>=0; i--, nSet--){
+		if(Set[i] <= V) l = Range[i];
 		else break;
 	}
 	Set[nSet] = V, Range[nSet] = l;
