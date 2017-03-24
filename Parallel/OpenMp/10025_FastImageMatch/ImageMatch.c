@@ -31,12 +31,11 @@ int main(){
 					}
 				}
 				C[i][j] = sum;
-				#pragma omp critical
-				if(C[i][j]<min){
-					min = C[i][j], minX = i, minY = j;
-				}
-
 			}
+		for(int i=0; i<=Ah-Bh; i++)
+			for(int j=0; j<=Aw-Bw; j++)
+				if(C[i][j] < min)
+					min = C[i][j], minX = i, minY = j;
 		printf("%d %d\n", minX+1, minY+1);				
 	}
 	return 0;
