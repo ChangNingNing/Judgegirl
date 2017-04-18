@@ -21,15 +21,13 @@ int myComp(const void *a, const void *b){
 	return *(int *)a - *(int *)b;
 }
 
-void knapsack(int flag){
-	int *_DP = DP[flag], *_pSum = pSum[flag];
-	int _n = n[flag];
-	for (int i=0; i<_n; i++)
-		for (int j=MIN(_pSum[i+1], M); j>=0; j--)
-			if (j >= sub[flag][i][0])
-				_DP[j] = MAX(_DP[j], _DP[j-sub[flag][i][0]] + sub[flag][i][1]);
-	for (int i=1; i<=M; i++)
-		if (_DP[i] == 0) _DP[i] = _DP[i-1];
+void knapsack(int _DP[MAXM], int _pSum[MAXN], int _sub[MAXN][2], int _n){
+	int *ptr = _sub[0];
+	for (int i=0; i<_n; i++){
+		int w = _sub[i][0], v = _sub[i][1];
+		for (int j=MIN(_pSum[i+1], M); j>=w; j--)
+			_DP[j] = MAX(_DP[j], _DP[j-w] + v);
+	}
 }
 
 int main(){
@@ -38,8 +36,11 @@ int main(){
     {
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
-        for (int i = 0; i < 6; i++)
-            CPU_SET(i, &cpuset);
+		int tid = omp_get_thread_num();
+		if (tid == 0)
+			CPU_SET(0, &cpuset);
+		else
+			CPU_SET(6, &cpuset);
         assert(sched_setaffinity(0, sizeof(cpuset), &cpuset) == 0);
     }
 
@@ -62,11 +63,11 @@ int main(){
 	{
 		#pragma omp section
 		{
-		knapsack(0);
+		knapsack(DP[0], pSum[0], sub[0], n[0]);
 		}
 		#pragma omp section
 		{
-		knapsack(1);
+		knapsack(DP[1], pSum[1], sub[1], n[1]);
 		}
 	}
 
