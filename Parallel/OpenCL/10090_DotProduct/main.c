@@ -5,12 +5,14 @@
 #include "utils.h"
 #include <CL/cl.h>
  
-#define MAXGPU 1
+#define MAXGPU 3
 #define MAXCODESZ 32767
 #define MAXN 16777216
 #define DEVICENUM 1
 
-static cl_uint A[MAXN], B[MAXN], C[MAXN];
+#define CHUNK 128
+
+static cl_uint C[MAXN];
 
 cl_context context;
 cl_command_queue commandQueue;
@@ -68,70 +70,51 @@ int preProcess(){
 }
 
 int main(int argc, char *argv[]) {
-    omp_set_num_threads(4);
     int N;
     uint32_t key1, key2;
 	cl_int status = preProcess();
 	assert(status);
 
 	/* create buffer */
-	cl_mem bufferA = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
-						MAXN * sizeof(cl_uint), A, &status); 
-	assert(status == CL_SUCCESS);
-	cl_mem bufferB = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
-						MAXN * sizeof(cl_uint), B, &status); 
-	assert(status == CL_SUCCESS);
 	cl_mem bufferC = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
 						MAXN * sizeof(cl_uint), C, &status); 
 	assert(status == CL_SUCCESS);
 
     while (scanf("%d %" PRIu32 " %" PRIu32, &N, &key1, &key2) == 3) {
-        int chunk = N / 4;
-		#pragma omp parallel for
-        for (int i = 0; i < N; i++) {
-            A[i] = encrypt(i, key1);
-            B[i] = encrypt(i, key2);
-        }
+		int threads = (N + CHUNK - 1)/CHUNK;
 
 		/* set arguments*/
-		status = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*)&bufferA);
+		status = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*)&bufferC);
 		assert(status == CL_SUCCESS);
-		status = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*)&bufferB);
+		status = clSetKernelArg(kernel, 1, sizeof(uint32_t), (void*)&N);
 		assert(status == CL_SUCCESS);
-		status = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void*)&bufferC);
+		status = clSetKernelArg(kernel, 2, sizeof(uint32_t), (void*)&threads);
 		assert(status == CL_SUCCESS);
-		
-		status = clEnqueueWriteBuffer(commandQueue, bufferA, CL_TRUE, 0, N*sizeof(cl_uint),
-						A, 0, NULL, NULL);
+		status = clSetKernelArg(kernel, 3, sizeof(uint32_t), (void*)&key1);
 		assert(status == CL_SUCCESS);
-		status = clEnqueueWriteBuffer(commandQueue, bufferB, CL_TRUE, 0, N*sizeof(cl_uint),
-						B, 0, NULL, NULL);
+		status = clSetKernelArg(kernel, 4, sizeof(uint32_t), (void*)&key2);
 		assert(status == CL_SUCCESS);
-
 
 		/* run */
-		size_t gS[] = {(size_t)N};
-		size_t lS[] = {1};
+		size_t gS[] = {(size_t)threads};
 		status = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL, gS, 0, 0, NULL, NULL);
 		assert(status == CL_SUCCESS);
 
 		/* get result */
 		status = clEnqueueReadBuffer(commandQueue, bufferC, CL_TRUE, 0,
-					N*sizeof(cl_uint), C, 0, NULL, NULL);
+					sizeof(cl_uint), C, 0, NULL, NULL);
 		assert(status == CL_SUCCESS);	
  
         uint32_t sum = 0;
-		#pragma omp parallel for reduction(+ : sum)
-        for (int i = 0; i < N; i++)
-            sum += C[i];
-        printf("%" PRIu32 "\n", sum);
+//		#pragma omp parallel for reduction(+ : sum)
+//      for (int i = 0; i < threads; i++)
+//          sum += C[i];
+        printf("%" PRIu32 "\n", C[0]);
     }
 	clReleaseContext(context);
 	clReleaseCommandQueue(commandQueue);
 	clReleaseProgram(program);
 	clReleaseKernel(kernel);
-	clReleaseMemObject(bufferA);
-	clReleaseMemObject(bufferB);
 	clReleaseMemObject(bufferC);
     return 0;
 }
