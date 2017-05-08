@@ -7,17 +7,18 @@
  
 #define MAXGPU 3
 #define MAXCODESZ 32767
-#define MAXN 16777216
 #define DEVICENUM 1
 
-#define CHUNK 128
+#define CHUNK 1024
+#define threads 256
+#define MAXN (((16777216 + CHUNK - 1)/CHUNK) + threads - 1) / threads
 
 static cl_uint C[MAXN];
 
 cl_context context;
 cl_command_queue commandQueue;
 cl_program program;
-cl_kernel kernel;
+cl_kernel kernel_dot;
 int preProcess(){
 	cl_int status;
 
@@ -63,7 +64,7 @@ int preProcess(){
 	}
 
 	/* create kernel */
-	kernel = clCreateKernel(program, "myDot", &status);
+	kernel_dot = clCreateKernel(program, "myDot", &status);
 	assert(status == CL_SUCCESS);
 
 	return 1;
@@ -81,40 +82,38 @@ int main(int argc, char *argv[]) {
 	assert(status == CL_SUCCESS);
 
     while (scanf("%d %" PRIu32 " %" PRIu32, &N, &key1, &key2) == 3) {
-		int threads = (N + CHUNK - 1)/CHUNK;
+		int nGroups = (((N + CHUNK - 1)/CHUNK) + threads - 1)/threads;
+		int groups = nGroups * threads;
 
 		/* set arguments*/
-		status = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*)&bufferC);
+		status = clSetKernelArg(kernel_dot, 0, sizeof(cl_mem), (void*)&bufferC);
 		assert(status == CL_SUCCESS);
-		status = clSetKernelArg(kernel, 1, sizeof(uint32_t), (void*)&N);
+		status = clSetKernelArg(kernel_dot, 1, sizeof(uint32_t), (void*)&N);
 		assert(status == CL_SUCCESS);
-		status = clSetKernelArg(kernel, 2, sizeof(uint32_t), (void*)&threads);
+		status = clSetKernelArg(kernel_dot, 2, sizeof(uint32_t), (void*)&key1);
 		assert(status == CL_SUCCESS);
-		status = clSetKernelArg(kernel, 3, sizeof(uint32_t), (void*)&key1);
+		status = clSetKernelArg(kernel_dot, 3, sizeof(uint32_t), (void*)&key2);
 		assert(status == CL_SUCCESS);
-		status = clSetKernelArg(kernel, 4, sizeof(uint32_t), (void*)&key2);
-		assert(status == CL_SUCCESS);
-
 		/* run */
-		size_t gS[] = {(size_t)threads};
-		status = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL, gS, 0, 0, NULL, NULL);
+		size_t gS[] = {(size_t)groups};
+		size_t lS[] = {(size_t)threads};
+		status = clEnqueueNDRangeKernel(commandQueue, kernel_dot, 1, NULL, gS, lS, 0, NULL, NULL);
 		assert(status == CL_SUCCESS);
 
 		/* get result */
 		status = clEnqueueReadBuffer(commandQueue, bufferC, CL_TRUE, 0,
-					sizeof(cl_uint), C, 0, NULL, NULL);
+					nGroups*sizeof(cl_uint), C, 0, NULL, NULL);
 		assert(status == CL_SUCCESS);	
  
-        uint32_t sum = 0;
-//		#pragma omp parallel for reduction(+ : sum)
-//      for (int i = 0; i < threads; i++)
-//          sum += C[i];
-        printf("%" PRIu32 "\n", C[0]);
+		uint32_t sum = 0;
+		for (int i=0; i<nGroups; i++)
+			sum += C[i];
+        printf("%" PRIu32 "\n", sum);
     }
 	clReleaseContext(context);
 	clReleaseCommandQueue(commandQueue);
 	clReleaseProgram(program);
-	clReleaseKernel(kernel);
+	clReleaseKernel(kernel_dot);
 	clReleaseMemObject(bufferC);
     return 0;
 }
