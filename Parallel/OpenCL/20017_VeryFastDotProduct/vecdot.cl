@@ -1,5 +1,13 @@
 #define CHUNK 1024
 #define threads 256
+#define AtomicMask 0x7
+
+#define DOT { sum += encrypt(i, key1) * encrypt(i, key2), i++; }
+#define UNROLL2  {DOT DOT}
+#define UNROLL4  {UNROLL2 UNROLL2}
+#define UNROLL8  {UNROLL4 UNROLL4}
+#define UNROLL16 {UNROLL8 UNROLL8}
+
 typedef unsigned int uint32_t;
 
 uint32_t rotate_left(uint32_t x, uint32_t n){
@@ -18,20 +26,16 @@ __kernel void myDot(__global int *C, uint32_t N, uint32_t key1, uint32_t key2){
 	int bound = (index + CHUNK < N)? index + CHUNK: N;
 	__local uint32_t localC[threads];
 	uint32_t sum = 0;
-	for (int i=index; i<bound; i++)
-		sum += encrypt(i, key1) * encrypt(i, key2);
-	localC[lid] = sum;
 
-	barrier(CLK_LOCAL_MEM_FENCE);
-
-	int rest = threads;
-	for (int rest=threads; rest>1; rest>>=1){
-		int offset = (rest + 1) >> 1;
-		if (lid + offset < rest)
-			localC[lid] += localC[lid + offset];
-		barrier(CLK_LOCAL_MEM_FENCE);
+	int i;
+	for (i=index; i+15<bound; ){
+		UNROLL16;
+	}
+	while (i < bound){
+		DOT;
 	}
 
-	if (lid == 0)
-		C[gid] = localC[0];
+	localC[lid] = sum;
+
+	atomic_add( &(C[lid & AtomicMask]), localC[lid]);
 }

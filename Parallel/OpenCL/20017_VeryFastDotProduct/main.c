@@ -12,6 +12,7 @@
 #define CHUNK 1024
 #define threads 256
 #define MAXN (((67108864 + CHUNK - 1)/CHUNK) + threads - 1) / threads
+#define AtomicN 8
 
 static cl_uint C[MAXN];
 
@@ -77,13 +78,18 @@ int main(int argc, char *argv[]) {
 	assert(status);
 
 	/* create buffer */
-	cl_mem bufferC = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
-						MAXN * sizeof(cl_uint), C, &status); 
+	cl_mem bufferC = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
+						AtomicN * sizeof(cl_uint), C, &status); 
 	assert(status == CL_SUCCESS);
 
     while (scanf("%d %" PRIu32 " %" PRIu32, &N, &key1, &key2) == 3) {
 		int nGroups = (((N + CHUNK - 1)/CHUNK) + threads - 1)/threads;
 		int groups = nGroups * threads;
+		/* initial */
+		const int zero = 0;
+		status = clEnqueueFillBuffer(commandQueue, bufferC, &zero, sizeof(int),
+					0, AtomicN*sizeof(cl_uint), 0, NULL, NULL);
+		assert(status == CL_SUCCESS);	
 
 		/* set arguments*/
 		status = clSetKernelArg(kernel_dot, 0, sizeof(cl_mem), (void*)&bufferC);
@@ -102,11 +108,11 @@ int main(int argc, char *argv[]) {
 
 		/* get result */
 		status = clEnqueueReadBuffer(commandQueue, bufferC, CL_TRUE, 0,
-					nGroups*sizeof(cl_uint), C, 0, NULL, NULL);
+					AtomicN*sizeof(cl_uint), C, 0, NULL, NULL);
 		assert(status == CL_SUCCESS);	
  
 		uint32_t sum = 0;
-		for (int i=0; i<nGroups; i++)
+		for (int i=0; i<AtomicN; i++)
 			sum += C[i];
         printf("%" PRIu32 "\n", sum);
     }
