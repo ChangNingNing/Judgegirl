@@ -14,70 +14,30 @@
 #define AtomicN 8
 #define MAXN 10005
 
-cl_context context[DEVICENUM];
-cl_command_queue commandQueue[DEVICENUM];
-cl_program program[DEVICENUM];
-cl_kernel kernel_dot[DEVICENUM];
+cl_platform_id		platform_id;
+cl_device_id		GPU[MAXGPU];
+const char *constKernelSource;
+size_t kernelLength;
 
 int preProcess(){
 	cl_int status;
 
 	/* get platform */
-	cl_platform_id platform_id;
 	cl_uint platform_id_got;
 	status = clGetPlatformIDs(1, &platform_id, &platform_id_got);
 	assert(status == CL_SUCCESS && platform_id_got == 1);
 
 	/* get device */
-	cl_device_id GPU[MAXGPU];
 	cl_uint GPU_id_got;
 	status = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, MAXGPU, GPU, &GPU_id_got);
 	assert(status == CL_SUCCESS && GPU_id_got >= DEVICENUM);
-
-	/* get context */
-	for (int i=0; i<DEVICENUM; i++){
-		context[i] = clCreateContext(NULL, 1, GPU + i, NULL, NULL, &status);
-		assert(status == CL_SUCCESS);
-	}
-
-	/* command queue */
-	for (int i=0; i<DEVICENUM; i++){
-		commandQueue[i] = clCreateCommandQueue(context[i], GPU[i], 0, &status);
-		assert(status == CL_SUCCESS);
-	}
 
 	/* Kernel source */
 	FILE *kernelfp = fopen("vecdot.cl", "r");
 	assert(kernelfp != NULL);
 	char kernelBuffer[MAXCODESZ];
-	const char *constKernelSource = kernelBuffer;
-	size_t kernelLength = fread(kernelBuffer, 1, MAXCODESZ, kernelfp);
-
-	for (int i=0; i<DEVICENUM; i++){
-		program[i] = clCreateProgramWithSource(context[i], 1, &constKernelSource,
-							&kernelLength, &status);
-		assert(status == CL_SUCCESS);
-	}
-
-	/* build program */
-	for (int i=0; i<DEVICENUM; i++){
-		const int MAXLOG = 4096;
-		status = clBuildProgram(program[i], 1, GPU + i, NULL, NULL, NULL);
-		if(status != CL_SUCCESS){
-			char log[MAXLOG];
-			size_t logLength;
-			clGetProgramBuildInfo(program[i], GPU[i], CL_PROGRAM_BUILD_LOG, MAXLOG, log, &logLength);
-			puts(log);
-			return 0;
-		}
-	}
-
-	/* create kernel */
-	for (int i=0; i<DEVICENUM; i++){
-		kernel_dot[i] = clCreateKernel(program[i], "myDot", &status);
-		assert(status == CL_SUCCESS);
-	}
-
+	constKernelSource = kernelBuffer;
+	kernelLength = fread(kernelBuffer, 1, MAXCODESZ, kernelfp);
 	return 1;
 }
 
@@ -111,56 +71,83 @@ int main(int argc, char *argv[]) {
 	#pragma omp parallel for schedule(static, 1)
 	for (int i=0; i<DEVICENUM; i++){
 		if (nCaseD[i] == 0) continue;
+		// get context
+		cl_context context = clCreateContext(NULL, 1, GPU + i, NULL, NULL, &status);
+		assert(status == CL_SUCCESS);
+
+		// command queue
+		cl_command_queue commandQueue = clCreateCommandQueue(context, GPU[i], 0, &status);
+		assert(status == CL_SUCCESS);
+
+		// create program
+		cl_program program = clCreateProgramWithSource(context, 1, &constKernelSource,
+							&kernelLength, &status);
+		assert(status == CL_SUCCESS);
+
+		// build program
+		const int MAXLOG = 4096;
+		status = clBuildProgram(program, 1, GPU + i, NULL, NULL, NULL);
+		if(status != CL_SUCCESS){
+			char log[MAXLOG];
+			size_t logLength;
+			clGetProgramBuildInfo(program, GPU[i], CL_PROGRAM_BUILD_LOG, MAXLOG, log, &logLength);
+			puts(log);
+		}
+		
+		// create kernel		
+		cl_kernel kernel_dot = clCreateKernel(program, "myDot", &status);
+		assert(status == CL_SUCCESS);
+
 		// create buffer
-		cl_mem bufC = clCreateBuffer(context[i], CL_MEM_WRITE_ONLY,
+		cl_mem bufC = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
 								nCaseD[i]*sizeof(cl_uint), C+leftD[i], &status); 
 		assert(status == CL_SUCCESS);
+
 		// initial
 		const int zero = 0;
-		status = clEnqueueFillBuffer(commandQueue[i], bufC, &zero, sizeof(int),
+		status = clEnqueueFillBuffer(commandQueue, bufC, &zero, sizeof(int),
 								0, nCaseD[i]*sizeof(cl_uint), 0, NULL, NULL);
 		assert(status == CL_SUCCESS);
 
+		uint32_t *_N = &N[leftD[i]];
+		uint32_t *_key1 = &key1[leftD[i]];
+		uint32_t *_key2 = &key2[leftD[i]];
 		for (int j=0; j<nCaseD[i]; j++){
-			int nGroups = (((N[leftD[i] + j] + CHUNK - 1)/CHUNK) + threads - 1)/threads;
+			int nGroups = (((_N[j] + CHUNK - 1)/CHUNK) + threads - 1)/threads;
 			int groups = nGroups * threads;
 
 			// set arguments
-			status = clSetKernelArg(kernel_dot[i], 0, sizeof(cl_mem), (void*)&bufC);
+			status = clSetKernelArg(kernel_dot, 0, sizeof(cl_mem), (void*)&bufC);
 			assert(status == CL_SUCCESS);
-			status = clSetKernelArg(kernel_dot[i], 1, sizeof(uint32_t), (void*)&(N[leftD[i]+j]));
+			status = clSetKernelArg(kernel_dot, 1, sizeof(uint32_t), (void*)&(_N[j]));
 			assert(status == CL_SUCCESS);
-			status = clSetKernelArg(kernel_dot[i], 2, sizeof(uint32_t), (void*)&(key1[leftD[i]+j]));
+			status = clSetKernelArg(kernel_dot, 2, sizeof(uint32_t), (void*)&(_key1[j]));
 			assert(status == CL_SUCCESS);
-			status = clSetKernelArg(kernel_dot[i], 3, sizeof(uint32_t), (void*)&(key2[leftD[i]+j]));
+			status = clSetKernelArg(kernel_dot, 3, sizeof(uint32_t), (void*)&(_key2[j]));
 			assert(status == CL_SUCCESS);
-			status = clSetKernelArg(kernel_dot[i], 4, sizeof(uint32_t), (void*)&j);
+			status = clSetKernelArg(kernel_dot, 4, sizeof(uint32_t), (void*)&j);
 			assert(status == CL_SUCCESS);
 
 			// run
 			size_t gS[] = {(size_t)groups};
 			size_t lS[] = {(size_t)threads};
-			status = clEnqueueNDRangeKernel(commandQueue[i], kernel_dot[i], 1, NULL, gS, lS, 0, NULL, NULL);
+			status = clEnqueueNDRangeKernel(commandQueue, kernel_dot, 1, NULL, gS, lS, 0, NULL, NULL);
 			assert(status == CL_SUCCESS);
 		}
 
 		// get result
-		status = clEnqueueReadBuffer(commandQueue[i], bufC, CL_TRUE, 0,
+		status = clEnqueueReadBuffer(commandQueue, bufC, CL_TRUE, 0,
 								nCaseD[i]*sizeof(cl_uint), C+leftD[i], 0, NULL, NULL);
 		assert(status == CL_SUCCESS);
 
+		clReleaseContext(context);
+		clReleaseCommandQueue(commandQueue);
+		clReleaseProgram(program);
+		clReleaseKernel(kernel_dot);
 		clReleaseMemObject(bufC);
 	}
 
-	for (int i=0; i<nCase; i++){
+	for (int i=0; i<nCase; i++)
 			printf("%" PRIu32 "\n", C[i]);
-	}
-
-	for (int i=0; i<DEVICENUM; i++){
-		clReleaseContext(context[i]);
-		clReleaseCommandQueue(commandQueue[i]);
-		clReleaseProgram(program[i]);
-		clReleaseKernel(kernel_dot[i]);
-	}
     return 0;
 }
