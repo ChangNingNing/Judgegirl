@@ -9,7 +9,7 @@
 #define MAXCODESZ 32767
 
 #define DEVICENUM 3
-#define CHUNK 1024
+#define CHUNK 512
 #define threads 256
 #define AtomicN 8
 #define MAXN 10005
@@ -42,7 +42,7 @@ int preProcess(){
 }
 
 uint32_t N[MAXN], key1[MAXN], key2[MAXN];
-static cl_uint C[MAXN];
+static cl_uint C[MAXN * AtomicN];
 
 int main(int argc, char *argv[]) {
 	cl_int status = preProcess();
@@ -63,8 +63,8 @@ int main(int argc, char *argv[]) {
 		leftD[1] = leftD[2] = 0;
 	}
 	else {
-		nCaseD[0] = nCase * 5 / 9, leftD[0] = 0;
-		nCaseD[1] = nCase * 3 / 9, leftD[1] = nCaseD[0];
+		nCaseD[0] = nCase * 28 / 54, leftD[0] = 0;
+		nCaseD[1] = nCase * 19 / 54, leftD[1] = nCaseD[0];
 		nCaseD[2] = nCase - nCaseD[0] - nCaseD[1], leftD[2] = leftD[1] + nCaseD[1];
 	}
 
@@ -99,55 +99,75 @@ int main(int argc, char *argv[]) {
 		assert(status == CL_SUCCESS);
 
 		// create buffer
+		cl_mem bufN = clCreateBuffer(context, CL_MEM_READ_ONLY,
+								nCaseD[i]*sizeof(cl_uint), N+leftD[i], &status); 
+		assert(status == CL_SUCCESS);
+		cl_mem bufKey1 = clCreateBuffer(context, CL_MEM_READ_ONLY,
+								nCaseD[i]*sizeof(cl_uint), key1+leftD[i], &status); 
+		assert(status == CL_SUCCESS);
+		cl_mem bufKey2 = clCreateBuffer(context, CL_MEM_READ_ONLY,
+								nCaseD[i]*sizeof(cl_uint), key2+leftD[i], &status); 
+		assert(status == CL_SUCCESS);
 		cl_mem bufC = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
-								nCaseD[i]*sizeof(cl_uint), C+leftD[i], &status); 
+								AtomicN*nCaseD[i]*sizeof(cl_uint), C+leftD[i]*AtomicN, &status); 
 		assert(status == CL_SUCCESS);
 
 		// initial
-		const int zero = 0;
-		status = clEnqueueFillBuffer(commandQueue, bufC, &zero, sizeof(int),
-								0, nCaseD[i]*sizeof(cl_uint), 0, NULL, NULL);
+		status = clEnqueueWriteBuffer(commandQueue, bufN, CL_FALSE, 0,
+								nCaseD[i]*sizeof(cl_uint), N+leftD[i], 0, NULL, NULL);
+		assert(status == CL_SUCCESS);
+		status = clEnqueueWriteBuffer(commandQueue, bufKey1, CL_FALSE, 0,
+								nCaseD[i]*sizeof(cl_uint), key1+leftD[i], 0, NULL, NULL);
+		assert(status == CL_SUCCESS);
+		status = clEnqueueWriteBuffer(commandQueue, bufKey2, CL_FALSE, 0,
+								nCaseD[i]*sizeof(cl_uint), key2+leftD[i], 0, NULL, NULL);
 		assert(status == CL_SUCCESS);
 
-		uint32_t *_N = &N[leftD[i]];
-		uint32_t *_key1 = &key1[leftD[i]];
-		uint32_t *_key2 = &key2[leftD[i]];
-		for (int j=0; j<nCaseD[i]; j++){
-			int nGroups = (((_N[j] + CHUNK - 1)/CHUNK) + threads - 1)/threads;
-			int groups = nGroups * threads;
+		const int zero = 0;
+		status = clEnqueueFillBuffer(commandQueue, bufC, &zero, sizeof(int),
+								0, AtomicN*nCaseD[i]*sizeof(cl_uint), 0, NULL, NULL);
+		assert(status == CL_SUCCESS);
 
-			// set arguments
-			status = clSetKernelArg(kernel_dot, 0, sizeof(cl_mem), (void*)&bufC);
-			assert(status == CL_SUCCESS);
-			status = clSetKernelArg(kernel_dot, 1, sizeof(uint32_t), (void*)&(_N[j]));
-			assert(status == CL_SUCCESS);
-			status = clSetKernelArg(kernel_dot, 2, sizeof(uint32_t), (void*)&(_key1[j]));
-			assert(status == CL_SUCCESS);
-			status = clSetKernelArg(kernel_dot, 3, sizeof(uint32_t), (void*)&(_key2[j]));
-			assert(status == CL_SUCCESS);
-			status = clSetKernelArg(kernel_dot, 4, sizeof(uint32_t), (void*)&j);
-			assert(status == CL_SUCCESS);
+		int nGroups = (((maxN + CHUNK - 1)/CHUNK) + threads - 1)/threads;
+		int groups = nGroups * threads;
 
-			// run
-			size_t gS[] = {(size_t)groups};
-			size_t lS[] = {(size_t)threads};
-			status = clEnqueueNDRangeKernel(commandQueue, kernel_dot, 1, NULL, gS, lS, 0, NULL, NULL);
-			assert(status == CL_SUCCESS);
-		}
+		// set arguments
+		status = clSetKernelArg(kernel_dot, 0, sizeof(cl_mem), (void*)&bufC);
+		assert(status == CL_SUCCESS);
+		status = clSetKernelArg(kernel_dot, 1, sizeof(cl_mem), (void*)&bufN);
+		assert(status == CL_SUCCESS);
+		status = clSetKernelArg(kernel_dot, 2, sizeof(cl_mem), (void*)&bufKey1);
+		assert(status == CL_SUCCESS);
+		status = clSetKernelArg(kernel_dot, 3, sizeof(cl_mem), (void*)&bufKey2);
+		assert(status == CL_SUCCESS);
+		status = clSetKernelArg(kernel_dot, 4, sizeof(uint32_t), (void*)&(nCaseD[i]));
+		assert(status == CL_SUCCESS);
+
+		// run
+		size_t gS[] = {(size_t)groups};
+		size_t lS[] = {(size_t)threads};
+		status = clEnqueueNDRangeKernel(commandQueue, kernel_dot, 1, NULL, gS, lS, 0, NULL, NULL);
+		assert(status == CL_SUCCESS);
 
 		// get result
 		status = clEnqueueReadBuffer(commandQueue, bufC, CL_TRUE, 0,
-								nCaseD[i]*sizeof(cl_uint), C+leftD[i], 0, NULL, NULL);
+								AtomicN*nCaseD[i]*sizeof(cl_uint), C+leftD[i]*AtomicN, 0, NULL, NULL);
 		assert(status == CL_SUCCESS);
 
 		clReleaseContext(context);
 		clReleaseCommandQueue(commandQueue);
 		clReleaseProgram(program);
 		clReleaseKernel(kernel_dot);
+		clReleaseMemObject(bufN);
+		clReleaseMemObject(bufKey1);
+		clReleaseMemObject(bufKey2);
 		clReleaseMemObject(bufC);
 	}
-
-	for (int i=0; i<nCase; i++)
-			printf("%" PRIu32 "\n", C[i]);
+	for (int i=0; i<nCase; i++){
+			int sum = 0;
+			for (int j=0; j<AtomicN; j++)
+				sum += C[i*AtomicN + j];
+			printf("%" PRIu32 "\n", sum);
+	}
     return 0;
 }
