@@ -71,6 +71,7 @@ int main() {
                     sum++;
                 else
                     sum = 0;
+//printf("i = %d, sum = %d, ret = %d\n", i, sum, ret[i]);
                 assert(sum == ret[i]);
                 HEX ^= i*ret[i];
             }
