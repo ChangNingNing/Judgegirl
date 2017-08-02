@@ -28,7 +28,9 @@ uint32_t Hash(const int const * nPair, const int num){
 int myCompare(const void *A, const void *B){
 	Node *a = (Node *)A, *b = (Node *)B;
 	if (a->grid[0] != b->grid[0]) return a->grid[0] - b->grid[0];
-	return a->grid[1] - b->grid[1];
+	//return a->grid[1] - b->grid[1];
+	if (a->grid[1] != b->grid[1]) return a->grid[1] - b->grid[1];
+	return pos[a->map][1] - pos[b->map][1];
 }
 
 int myBS(int l, int r, int *grid){
@@ -53,6 +55,7 @@ int myBS(int l, int r, int *grid){
 
 void myRadar(){
 	memset(nEdge, 0, sizeof(nEdge));
+
 	int curGrid[2] = {-1, -1}, curP = -1;
 
 	for (int i=0; i<N; i++){
@@ -62,6 +65,8 @@ void myRadar(){
 			if (node[i].grid[0] != node[j].grid[0] ||
 				node[i].grid[1] <  node[j].grid[1] -1) break;
 			m2 = node[j].map;
+			//
+			if (pos[m2][1] - pos[m1][1] > D) break;
 			int d2 = Square(pos[m1][0]-pos[m2][0]) + Square(pos[m1][1]-pos[m2][1]);
 			if (d2 <= D2) nEdge[m1]++, nEdge[m2]++;
 		}
@@ -77,6 +82,8 @@ void myRadar(){
 			if (curGrid[0] != node[j].grid[0] - 1 ||
 				curGrid[1] <  node[j].grid[1] - 1 ) break;
 			m2 = node[j].map;
+			//
+			if (pos[m2][1] - pos[m1][1] > D) break;
 			int d2 = Square(pos[m1][0]-pos[m2][0]) + Square(pos[m1][1]-pos[m2][1]);
 			if (d2 <= D2) nEdge[m1]++, nEdge[m2]++;
 		}
